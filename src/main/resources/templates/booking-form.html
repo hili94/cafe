@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Make a Reservation - Cafe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #d4edda;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+<h1>☕ Book a Table at Our Cafe</h1>
+
+<form th:action="@{/reservations/submit}" th:object="${booking}" method="post">
+
+    <div class="form-group">
+        <label for="customerName">Name:</label>
+        <input type="text"
+               id="customerName"
+               th:field="*{customerName}"
+               placeholder="Enter your name"
+               required/>
+    </div>
+
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email"
+               id="email"
+               th:field="*{email}"
+               placeholder="your.email@example.com"
+               required/>
+    </div>
+
+    <div class="form-group">
+        <label for="phone">Phone:</label>
+        <input type="tel"
+               id="phone"
+               th:field="*{phone}"
+               placeholder="555-1234"
+               required/>
+    </div>
+
+    <div class="form-group">
+        <label for="reservationDate">Reservation Date:</label>
+        <input type="date"
+               id="reservationDate"
+               th:field="*{reservationDate}"
+               required/>
+    </div>
+
+    <div class="form-group">
+        <label for="reservationTime">Reservation Time:</label>
+        <input type="time"
+               id="reservationTime"
+               th:field="*{reservationTime}"
+               required/>
+    </div>
+
+    <div class="form-group">
+        <label for="numberOfGuests">Number of Guests:</label>
+        <input type="number"
+               id="numberOfGuests"
+               th:field="*{numberOfGuests}"
+               min="1"
+               max="20"
+               placeholder="1"
+               required/>
+    </div>
+
+    <button type="submit">Book Now</button>
+</form>
+</body>
+</html>

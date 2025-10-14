@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @Controller
 @RequestMapping("/reservations")
@@ -30,19 +31,53 @@ public class CafeController {
         return "booking-form";
     }
 
-    // POST request - Process the submitted form
     @PostMapping("/submit")
     public String submitBooking(@ModelAttribute Booking booking, Model model) {
-        // Save the booking to the database
-        Booking savedBooking = bookingRepository.save(booking);
+        try {
+            // check input validity
+            if (booking.getCustomerName() == null || booking.getCustomerName().trim().isEmpty()) {
+                model.addAttribute("error", "Please enter a valid customer name.");
+                return "booking-form";
+            }
+            if (booking.getEmail() == null || booking.getEmail().trim().isEmpty()) {
+                 model.addAttribute("error", "Please enter a valid email address.");
+                 return "booking-form";
+            }
+            if (booking.getPhone() == null || booking.getPhone().trim().isEmpty()) {
+                model.addAttribute("error", "Please enter a valid phone number.");
+                return "booking-form";
+            }
+            if (booking.getReservationDate() == null) {
+                model.addAttribute("error", "Please enter a valid reservation date.");
+                return "booking-form";
+            }
+            if (booking.getReservationTime() == null) {
+                model.addAttribute("error", "Please enter a valid reservation time.");
+                return "booking-form";
+            }
+            if (booking.getNumberOfGuests() < 1) {
+                model.addAttribute("error", "Please enter a valid number of guests.");
+                return "booking-form";
+            } else if (booking.getNumberOfGuests() >= 10) {
+                model.addAttribute("error", "For parties larger than 10 please contact us.");
+            }
 
-        System.out.println("Saved booking to database with ID: " + savedBooking.getId());
-        System.out.println("Received booking for: " + booking.getCustomerName());
+            Booking savedBooking = bookingRepository.save(booking);
+            return "redirect:/reservations/confirmation/" + savedBooking.getId();
+        } catch (Exception e) {
+            model.addAttribute("error", "Unable to save booking. Please try again.");
+            return "booking-form";
+        }
+    }
 
-        // Add the booking to the model for the confirmation page
-        model.addAttribute("booking", savedBooking);
-
-        // Return the confirmation page template
+    // GET request - Show confirmation page
+    @GetMapping("/confirmation/{id}")
+    public String showConfirmation(@PathVariable Long id, Model model) {
+        Booking booking = bookingRepository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Invalid booking ID: " + id));
+    
+        model.addAttribute("booking", booking);
         return "booking-confirmation";
     }
+
 }

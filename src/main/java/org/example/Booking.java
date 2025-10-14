@@ -1,14 +1,32 @@
 package org.example;
 
+import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+@Entity
+@Table(name = "bookings")
 public class Booking {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(nullable = false)
     private String customerName;
+    
+    @Column(nullable = false)
     private String email;
+    
     private String phone;
+    
+    @Column(nullable = false)
     private LocalDate reservationDate;
+    
+    @Column(nullable = false)
     private LocalTime reservationTime;
+    
+    @Column(nullable = false)
     private int numberOfGuests;
 
     // Default constructor (needed by Spring)
@@ -24,7 +42,15 @@ public class Booking {
         this.numberOfGuests = numberOfGuests;
     }
 
-    // Getters and Setters (Spring needs these to bind form data)
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public String getCustomerName() {
         return customerName;
     }
@@ -72,5 +98,4 @@ public class Booking {
     public void setNumberOfGuests(int numberOfGuests) {
         this.numberOfGuests = numberOfGuests;
     }
-
 }

@@ -11,6 +11,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @RequestMapping("/reservations")
 public class CafeController {
 
+    private final BookingRepository bookingRepository;
+
+    public CafeController(BookingRepository bookingRepository) {
+        this.bookingRepository = bookingRepository;
+    }
+
     // GET request - Show the booking form
     @GetMapping("/new")
     public String showBookingForm(Model model) {
@@ -27,16 +33,14 @@ public class CafeController {
     // POST request - Process the submitted form
     @PostMapping("/submit")
     public String submitBooking(@ModelAttribute Booking booking, Model model) {
-        // At this point, Spring has automatically filled the 'booking' object
-        // with data from the form using the getters/setters
+        // Save the booking to the database
+        Booking savedBooking = bookingRepository.save(booking);
 
-        // You could save to database here, send email, etc.
-        // For now, we'll just pass it to the confirmation page
-
+        System.out.println("Saved booking to database with ID: " + savedBooking.getId());
         System.out.println("Received booking for: " + booking.getCustomerName());
 
         // Add the booking to the model for the confirmation page
-        model.addAttribute("booking", booking);
+        model.addAttribute("booking", savedBooking);
 
         // Return the confirmation page template
         return "booking-confirmation";

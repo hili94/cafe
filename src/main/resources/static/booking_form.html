@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Make a Reservation - Cafe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #d4edda;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>☕ Book a Table at Our Cafe</h1>
+
+    <!-- Error message -->
+    <div id="errorMessage" class="error"></div>
+    
+    <!-- Success message -->
+    <div id="successMessage" class="success"></div>
+
+    <form id="bookingForm">
+        <div class="form-group">
+            <label for="customerName">Name:</label>
+            <input type="text" id="customerName" placeholder="Enter your name" required/>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" placeholder="your.email@example.com" required/>
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone:</label>
+            <input type="tel" id="phone" placeholder="555-1234" required/>
+        </div>
+
+        <div class="form-group">
+            <label for="reservationDate">Reservation Date:</label>
+            <input type="date" id="reservationDate" required/>
+        </div>
+
+        <div class="form-group">
+            <label for="reservationTime">Reservation Time:</label>
+            <select id="reservationTime" required>
+                <option value="">-- Select a time --</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="numberOfGuests">Number of Guests:</label>
+            <input type="number" id="numberOfGuests" min="1" max="20" placeholder="1" required/>
+        </div>
+
+        <button type="submit">Book Now</button>
+    </form>
+
+    <script>
+        // Load time slots when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            populateTimeSlots();
+        });
+
+        // Generate time slots (9am to 5pm in 15-min increments)
+        function populateTimeSlots() {
+            const select = document.getElementById('reservationTime');
+            const startHour = 9;
+            const endHour = 17;
+            
+            for (let hour = startHour; hour <= endHour; hour++) {
+                for (let minute = 0; minute < 60; minute += 15) {
+                    if (hour === endHour && minute > 0) break;
+                    
+                    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const option = document.createElement('option');
+                    option.value = timeStr;
+                    option.textContent = timeStr;
+                    select.appendChild(option);
+                }
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Prevent traditional form submission
+            
+            // Hide previous messages
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+
+            // Collect form data
+            const booking = {
+                customerName: document.getElementById('customerName').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value,
+                reservationDate: document.getElementById('reservationDate').value,
+                reservationTime: document.getElementById('reservationTime').value,
+                numberOfGuests: parseInt(document.getElementById('numberOfGuests').value)
+            };
+
+            try {
+                // Call REST API
+                const response = await fetch('/api/bookings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(booking)
+                });
+
+                if (response.ok) {
+                    const savedBooking = await response.json();
+                    
+                    // Show success message
+                    const successDiv = document.getElementById('successMessage');
+                    successDiv.textContent = `✅ Booking confirmed for ${savedBooking.customerName} on ${savedBooking.reservationDate} at ${savedBooking.reservationTime}!`;
+                    successDiv.style.display = 'block';
+                    
+                    // Clear form
+                    document.getElementById('bookingForm').reset();
+                } else {
+                    // Show error
+                    const errorDiv = document.getElementById('errorMessage');
+                    errorDiv.textContent = '❌ Unable to create booking. Please check your input.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                // Network error
+                const errorDiv = document.getElementById('errorMessage');
+                errorDiv.textContent = '❌ Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

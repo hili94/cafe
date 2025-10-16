@@ -1,0 +1,195 @@
+package org.example;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.Optional;
+
+import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(BookingRestController.class)
+class BookingRestControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private BookingRepository bookingRepository;
+
+    // Helper method to create a valid booking
+    private Booking createValidBooking() {
+        Booking booking = new Booking();
+        booking.setCustomerName("John Doe");
+        booking.setEmail("johndoe@gmail.com");
+        booking.setPhone("1112223456");
+        booking.setReservationDate(LocalDate.parse("2025-01-01"));
+        booking.setReservationTime(LocalTime.parse("10:00:00"));
+        booking.setNumberOfGuests(4);
+        return booking;
+    }
+
+    @Test
+    void testGetAllBookings() throws Exception {
+        // Arrange
+        Booking booking1 = createValidBooking();
+        booking1.setId(1L);
+
+        Booking booking2 = createValidBooking();
+        booking2.setId(2L);
+        booking2.setCustomerName("Jane Smith");
+
+        when(bookingRepository.findAll()).thenReturn(Arrays.asList(booking1, booking2));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/bookings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[0].customerName", is("John Doe")))
+                .andExpect(jsonPath("$[1].id", is(2)))
+                .andExpect(jsonPath("$[1].customerName", is("Jane Smith")));
+
+        verify(bookingRepository, times(1)).findAll();
+    }
+
+    @Test
+    void testGetBookingById_Success() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setId(1L);
+
+        when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
+
+        // Act & Assert
+        mockMvc.perform(get("/api/bookings/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.customerName", is("John Doe")))
+                .andExpect(jsonPath("$.email", is("johndoe@gmail.com")))
+                .andExpect(jsonPath("$.numberOfGuests", is(4)));
+
+        verify(bookingRepository, times(1)).findById(1L);
+    }
+
+    @Test
+    void testGetBookingById_NotFound() throws Exception {
+        // Arrange
+        when(bookingRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        mockMvc.perform(get("/api/bookings/999"))
+                .andExpect(status().isNotFound());
+
+        verify(bookingRepository, times(1)).findById(999L);
+    }
+
+    @Test
+    void testCreateBooking_Success() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        Booking savedBooking = createValidBooking();
+        savedBooking.setId(1L);
+
+        when(bookingRepository.save(any(Booking.class))).thenReturn(savedBooking);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.customerName", is("John Doe")))
+                .andExpect(jsonPath("$.email", is("johndoe@gmail.com")));
+
+        verify(bookingRepository, times(1)).save(any(Booking.class));
+    }
+
+    @Test
+    void testCreateBooking_EmptyName() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setCustomerName("");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isBadRequest());
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+    @Test
+    void testCreateBooking_InvalidEmail() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setEmail("johndoe");
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isBadRequest());
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+    @Test
+    void testCreateBooking_TooManyGuests() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setNumberOfGuests(15);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isBadRequest());
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+    @Test
+    void testDeleteBooking_Success() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setId(1L);
+
+        when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
+        doNothing().when(bookingRepository).delete(booking);
+
+        // Act & Assert
+        mockMvc.perform(delete("/api/bookings/1"))
+                .andExpect(status().isNoContent());
+
+        verify(bookingRepository, times(1)).findById(1L);
+        verify(bookingRepository, times(1)).delete(booking);
+    }
+
+    @Test
+    void testDeleteBooking_NotFound() throws Exception {
+        // Arrange
+        when(bookingRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        mockMvc.perform(delete("/api/bookings/999"))
+                .andExpect(status().isNotFound());
+
+        verify(bookingRepository, times(1)).findById(999L);
+        verify(bookingRepository, never()).delete(any(Booking.class));
+    }
+}

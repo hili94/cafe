@@ -8,6 +8,10 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +55,33 @@ public class BookingRestController {
         }
         Booking savedBooking = bookingRepository.save(booking);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedBooking);
+    }
+
+    // GET - Get list of available time slots for given date
+    @GetMapping("/available-times/{date}")
+    public ResponseEntity<List<LocalTime>> getAvailableTimes(@PathVariable String date) {
+        // get reservations for given date
+        //convert date string to LocalDate
+        LocalDate localDate = LocalDate.parse(date);
+        List<Booking> bookings = bookingRepository.findByReservationDate(localDate);
+
+        // generate available time slots
+        List<LocalTime> times = generateTimeSlots();
+
+        // remove any times that are already booked
+        for (Booking booking : bookings) {
+            LocalTime startTime = booking.getReservationTime();
+            LocalTime endTime = startTime.plusMinutes(booking.getNumberOfGuests() * 15L);
+            for (int i = 0; i < times.size(); i++) { // for each timeslot
+                LocalTime time = times.get(i); //get the current timeslot
+                if (time.isAfter(startTime) && time.isBefore(endTime)) { // if the timeslot overlaps with the booking
+                    times.remove(i);
+                    i--; //decrement i to skip the current timeslot since it was already removed
+                }
+            }
+        }
+
+        return ResponseEntity.ok(times);
     }
 
     // GET - Get bookings by email
@@ -122,5 +153,20 @@ public class BookingRestController {
     private boolean checkForConflictingBookings(Booking booking) {
         List<Booking> bookings = bookingRepository.findByReservationDateAndReservationTime(booking.getReservationDate(), booking.getReservationTime());
         return !bookings.isEmpty();
+    }
+
+    //
+    // Generate a list of LocalTime objects from 9:00 to 17:00 in 15-minute increments
+    private static List<LocalTime> generateTimeSlots() {
+        List<LocalTime> timeList = new ArrayList<>();
+        LocalTime currentTime = LocalTime.of(9, 0);
+        LocalTime endTime = LocalTime.of(11, 0);
+        long incrementValue = 15;
+
+        while (!currentTime.isAfter(endTime)) {
+            timeList.add(currentTime);
+            currentTime = currentTime.plusMinutes(incrementValue);
+        }
+        return timeList;
     }
 }

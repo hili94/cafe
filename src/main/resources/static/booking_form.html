@@ -121,41 +121,52 @@
     </form>
 
     <script>
-        // Load time slots when page loads
-        window.addEventListener('DOMContentLoaded', function() {
-            populateTimeSlots();
-        });
-
-        // Generate time slots (9am to 5pm in 15-min increments)
-        function populateTimeSlots() {
-            const select = document.getElementById('reservationTime');
-            const startHour = 9;
-            const endHour = 17;
-            
-            for (let hour = startHour; hour <= endHour; hour++) {
-                for (let minute = 0; minute < 60; minute += 15) {
-                    if (hour === endHour && minute > 0) break;
-                    
-                    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                    const option = document.createElement('option');
-                    option.value = timeStr;
-                    option.textContent = timeStr;
-                    select.appendChild(option);
-                }
-            }
-        }
-
         //Handle navigate to find bookings page
         document.getElementById('lookUpBooking').addEventListener('click', function() {
             window.location.href = '/find_bookings.html';
         });
+
+        // Handle Date Selection Change
+        document.getElementById('reservationDate').addEventListener('change', async function() {
+            const selectedDate = this.value;
+            // GET available timeslots
+            const fetchCall = `/api/bookings/available-times/${selectedDate}`;
+            try {
+                const response = await fetch(fetchCall, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                // check for empty response
+                if (!response.ok) {
+                    showError('Error fetching bookings. Please try again.');
+                    return;
+                }
+                //populate dropdown with available timeslots
+                const timeslots = await response.json();
+                const selectElement = document.getElementById('reservationTime');
+                selectElement.innerHTML = '<option value="">-- Select a time --</option>';
+                timeslots.forEach(timeslot => {
+                    const option = document.createElement('option');
+                    option.value = timeslot;
+                    option.textContent = timeslot;
+                    selectElement.appendChild(option);
+                });
+
+            } catch(error) {
+                showError('Network error. Please try again.');
+                console.error('Error:', error);
+            }
+        })
 
         // Handle form submission
         document.getElementById('bookingForm').addEventListener('submit', async function(e) {
             e.preventDefault(); // Prevent traditional form submission
             
             // Hide previous messages
-            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('errorMessage').textContent = 'Error fetching bookings. Please try again.';
+            document.getElementById('errorMessage').style.display = 'block';
             document.getElementById('successMessage').style.display = 'none';
 
             // Collect form data

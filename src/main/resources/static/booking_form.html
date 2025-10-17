@@ -115,6 +115,9 @@
         </div>
 
         <button type="submit">Book Now</button>
+        <br>
+        <br>
+        <button type="button" id="lookUpBooking">Look Up Bookings</button>
     </form>
 
     <script>
@@ -141,6 +144,11 @@
                 }
             }
         }
+
+        //Handle navigate to find bookings page
+        document.getElementById('lookUpBooking').addEventListener('click', function() {
+            window.location.href = '/find_bookings.html';
+        });
 
         // Handle form submission
         document.getElementById('bookingForm').addEventListener('submit', async function(e) {
@@ -181,9 +189,10 @@
                     // Clear form
                     document.getElementById('bookingForm').reset();
                 } else {
-                    // Show error
+                    // Read the error message from response body
+                    const errorData = await response.json();
                     const errorDiv = document.getElementById('errorMessage');
-                    errorDiv.textContent = '❌ Unable to create booking. Please check your input.';
+                    errorDiv.textContent = '❌ ' + (errorData.error || 'Unable to create booking. Please check your input.');
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {

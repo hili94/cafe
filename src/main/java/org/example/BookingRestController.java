@@ -38,12 +38,43 @@ public class BookingRestController {
 
     // POST - Create a new booking
     @PostMapping
-    public ResponseEntity<Booking> createBooking(@Valid @RequestBody Booking booking) {
+    public ResponseEntity<?> createBooking(@Valid @RequestBody Booking booking) {
         // Spring automatically validates based on annotations
         // If validation fails, it throws MethodArgumentNotValidException
-        
+
+        //Ensure there is no existing booking at the same time
+        boolean isExistingBooking = checkForConflictingBookings(booking);
+        if (isExistingBooking) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "There is already a booking at this time");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
         Booking savedBooking = bookingRepository.save(booking);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedBooking);
+    }
+
+    // GET - Get bookings by email
+    @GetMapping("/email/{email}")
+    public ResponseEntity<List<Booking>> getBookingsByEmail(@PathVariable String email) {
+        List<Booking> bookings = bookingRepository.findByEmail(email);
+
+        if (bookings.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(bookings);
+    }
+
+    // GET - Get bookings by phone
+    @GetMapping("/phone/{phone}")
+    public ResponseEntity<List<Booking>> getBookingsByPhone(@PathVariable String phone) {
+        List<Booking> bookings = bookingRepository.findByPhone(phone);
+
+        if (bookings.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(bookings);
     }
 
     // PUT - Update an existing booking
@@ -86,5 +117,10 @@ public class BookingRestController {
             errors.put(fieldName, errorMessage);
         });
         return errors;
+    }
+
+    private boolean checkForConflictingBookings(Booking booking) {
+        List<Booking> bookings = bookingRepository.findByReservationDateAndReservationTime(booking.getReservationDate(), booking.getReservationTime());
+        return !bookings.isEmpty();
     }
 }

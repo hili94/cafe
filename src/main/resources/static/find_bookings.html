@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Find Bookings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #d4edda;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+            display: none;
+        }
+        #bookingsList {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .booking-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .booking-card h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .booking-info {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+<h1>☕ Look Up Cafe Bookings</h1>
+
+<!-- Error message -->
+<div id="errorMessage" class="error"></div>
+
+<form id="lookUpForm">
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" placeholder="your.email@example.com"/>
+        <label for="phone">Phone:</label>
+        <input type="tel" id="phone" placeholder="555-9999"/>
+    </div>
+    <button type="submit">Look Up Bookings</button>
+    <br>
+    <br>
+    <button type="button" id="backButton">Back to Home</button>
+</form>
+
+<!-- Bookings list -->
+<div id="bookingsList"></div>
+
+<script>
+
+    // Redirect to home page
+    document.getElementById('backButton').addEventListener('click', function() {
+        window.location.href = '/';
+    });
+
+    document.getElementById('lookUpForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        // Hide previous messages
+        document.getElementById('errorMessage').style.display = 'none';
+        document.getElementById('bookingsList').style.display = 'none';
+
+        // Get input from form
+        const email = document.getElementById('email').value;
+        const phone = document.getElementById('phone').value;
+        let fetchCall = '';
+        if (!email) {
+            if (!phone) {
+                showError('Please enter an email or phone number.');
+                return;
+            } else {
+                fetchCall = '/api/bookings/phone/' + encodeURIComponent(phone);
+            }
+        } else {
+            fetchCall = '/api/bookings/email/' + encodeURIComponent(email);
+        }
+
+        try {
+            // Call REST API
+            const response = await fetch(fetchCall, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    showError('No bookings found!.');
+                } else {
+                    showError('Error fetching bookings. Please try again.');
+                }
+                return;
+            }
+
+            // Parse JSON response
+            const bookings = await response.json();
+
+            if (bookings.length === 0) {
+                showError('No bookings found!');
+                return;
+            }
+
+            // Display bookings
+            displayBookings(bookings);
+
+        } catch (error) {
+            showError('Network error. Please try again.');
+            console.error('Error:', error);
+        }
+    });
+
+    function showError(message) {
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+
+    function displayBookings(bookings) {
+        const bookingsList = document.getElementById('bookingsList');
+
+        let html = '<h2>Your Bookings (' + bookings.length + ')</h2>';
+
+        bookings.forEach(booking => {
+            html += `
+                <div class="booking-card">
+                    <h3>Booking #${booking.id}</h3>
+                    <div class="booking-info"><strong>Name:</strong> ${booking.customerName}</div>
+                    <div class="booking-info"><strong>Email:</strong> ${booking.email}</div>
+                    <div class="booking-info"><strong>Phone:</strong> ${booking.phone}</div>
+                    <div class="booking-info"><strong>Date:</strong> ${booking.reservationDate}</div>
+                    <div class="booking-info"><strong>Time:</strong> ${booking.reservationTime}</div>
+                    <div class="booking-info"><strong>Guests:</strong> ${booking.numberOfGuests}</div>
+                </div>
+            `;
+        });
+
+        bookingsList.innerHTML = html;
+        bookingsList.style.display = 'block';
+    }
+</script>
+</body>
+</html>

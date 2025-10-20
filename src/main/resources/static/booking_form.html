@@ -126,6 +126,13 @@
             window.location.href = '/find_bookings.html';
         });
 
+        // Helper function to show error messages
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = '❌ ' + message;
+            errorDiv.style.display = 'block';
+        }
+
         // Handle Date Selection Change
         document.getElementById('reservationDate').addEventListener('change', async function() {
             const selectedDate = this.value;
@@ -165,8 +172,7 @@
             e.preventDefault(); // Prevent traditional form submission
             
             // Hide previous messages
-            document.getElementById('errorMessage').textContent = 'Error fetching bookings. Please try again.';
-            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
             document.getElementById('successMessage').style.display = 'none';
 
             // Collect form data

@@ -2,7 +2,6 @@ package org.example;
 
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -155,7 +153,6 @@ public class BookingRestController {
         return !bookings.isEmpty();
     }
 
-    //
     // Generate a list of LocalTime objects from 9:00 to 17:00 in 15-minute increments
     private static List<LocalTime> generateTimeSlots(LocalDate date) {
         List<LocalTime> timeList = new ArrayList<>();

@@ -66,7 +66,7 @@ public class BookingRestController {
         List<Booking> bookings = bookingRepository.findByReservationDate(localDate);
 
         // generate available time slots
-        List<LocalTime> times = generateTimeSlots();
+        List<LocalTime> times = generateTimeSlots(localDate);
 
         // remove any times that are already booked
         for (Booking booking : bookings) {
@@ -157,7 +157,7 @@ public class BookingRestController {
 
     //
     // Generate a list of LocalTime objects from 9:00 to 17:00 in 15-minute increments
-    private static List<LocalTime> generateTimeSlots() {
+    private static List<LocalTime> generateTimeSlots(LocalDate date) {
         List<LocalTime> timeList = new ArrayList<>();
         LocalTime currentTime = LocalTime.of(9, 0);
         LocalTime endTime = LocalTime.of(17, 0);
@@ -167,7 +167,12 @@ public class BookingRestController {
             timeList.add(currentTime);
             currentTime = currentTime.plusMinutes(incrementValue);
         }
-        //remove final timeslot
+        // if today's date is equal to date, remove time slots before current time
+        if (date.isEqual(LocalDate.now())) {
+            LocalTime now = LocalTime.now();
+            timeList.removeIf(time -> time.isBefore(now));
+        }
+        //remove final timeslot as this is too late in the cafe's day to take guests
         timeList.remove(timeList.size() - 1);
         return timeList;
     }

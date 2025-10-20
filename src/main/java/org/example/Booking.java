@@ -29,7 +29,7 @@ public class Booking {
     private String phone;
     
     @NotNull(message = "Reservation date is required")
-    @Future(message = "Reservation date must be in the future")
+    @FutureOrPresent(message = "Reservation date must be in the future")
     @Column(nullable = false)
     private LocalDate reservationDate;
     

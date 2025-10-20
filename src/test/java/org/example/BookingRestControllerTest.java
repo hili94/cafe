@@ -37,7 +37,7 @@ class BookingRestControllerTest {
         booking.setCustomerName("John Doe");
         booking.setEmail("johndoe@gmail.com");
         booking.setPhone("1112223456");
-        booking.setReservationDate(LocalDate.parse("2025-01-01"));
+        booking.setReservationDate(LocalDate.now().plusDays(7));
         booking.setReservationTime(LocalTime.parse("10:00:00"));
         booking.setNumberOfGuests(4);
         return booking;
@@ -191,5 +191,35 @@ class BookingRestControllerTest {
 
         verify(bookingRepository, times(1)).findById(999L);
         verify(bookingRepository, never()).delete(any(Booking.class));
+    }
+
+    @Test
+    void testAvailableTimeSlots_ExistingBooking() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setId(1L);
+
+        // reset here for easy reading
+        booking.setReservationTime(LocalTime.parse("10:00:00"));
+        booking.setNumberOfGuests(4); // 4 guests = 60 minutes (4 * 15)
+
+        // Mock repository to return this booking when searching by date
+        when(bookingRepository.findByReservationDate(booking.getReservationDate()))
+                .thenReturn(Arrays.asList(booking));
+
+        // Act & Assert
+        // The booking at 10:00 with 4 guests blocks 10:00-11:00
+        // So available slots should be: 09:00, 09:15, 09:30, 09:45
+        // (10:00, 10:15, 10:30, 10:45 are blocked)
+        mockMvc.perform(get("/api/bookings/available-times/" 
+                        + booking.getReservationDate().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(28))) // 4 available slots
+                .andExpect(jsonPath("$[0]", is("09:00:00")))
+                .andExpect(jsonPath("$[1]", is("09:15:00")))
+                .andExpect(jsonPath("$[2]", is("09:30:00")))
+                .andExpect(jsonPath("$[3]", is("09:45:00")));
+
+        verify(bookingRepository, times(1)).findByReservationDate(booking.getReservationDate());
     }
 }

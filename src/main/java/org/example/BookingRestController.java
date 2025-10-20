@@ -74,7 +74,7 @@ public class BookingRestController {
             LocalTime endTime = startTime.plusMinutes(booking.getNumberOfGuests() * 15L);
             for (int i = 0; i < times.size(); i++) { // for each timeslot
                 LocalTime time = times.get(i); //get the current timeslot
-                if (time.isAfter(startTime) && time.isBefore(endTime)) { // if the timeslot overlaps with the booking
+                if ((time.equals(startTime) || time.isAfter(startTime)) && time.isBefore(endTime)) {
                     times.remove(i);
                     i--; //decrement i to skip the current timeslot since it was already removed
                 }
@@ -160,13 +160,15 @@ public class BookingRestController {
     private static List<LocalTime> generateTimeSlots() {
         List<LocalTime> timeList = new ArrayList<>();
         LocalTime currentTime = LocalTime.of(9, 0);
-        LocalTime endTime = LocalTime.of(11, 0);
+        LocalTime endTime = LocalTime.of(17, 0);
         long incrementValue = 15;
 
         while (!currentTime.isAfter(endTime)) {
             timeList.add(currentTime);
             currentTime = currentTime.plusMinutes(incrementValue);
         }
+        //remove final timeslot
+        timeList.remove(timeList.size() - 1);
         return timeList;
     }
 }

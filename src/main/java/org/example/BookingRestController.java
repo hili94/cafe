@@ -52,15 +52,26 @@ public class BookingRestController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
 
-        //Ensure there is no existing booking at the same time
-        boolean isExistingBooking = checkForConflictingBookings(booking);
-        if (isExistingBooking) {
+        // Assign a table based on number of guests and availability
+        Integer assignedTable = assignTable(booking);
+        if (assignedTable == null) {
             Map<String, String> error = new HashMap<>();
-            error.put("error", "There is already a booking at this time");
+            error.put("error", "No tables available for " + booking.getNumberOfGuests() +
+                    " guest(s) at this time. Please select a different time.");
             return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
         }
-        Booking savedBooking = bookingRepository.save(booking);
-        return ResponseEntity.status(HttpStatus.CREATED).body(savedBooking);
+
+        booking.setTableNumber(assignedTable);
+
+        try {
+            Booking savedBooking = bookingRepository.save(booking);
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedBooking);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // This catches the race condition where two users try to book simultaneously
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This time slot was just booked by another customer. Please select a different time.");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
     }
 
     // GET - Get list of available time slots for given date
@@ -127,17 +138,20 @@ public class BookingRestController {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
                 }
 
-                // Check if the new time slot conflicts with OTHER bookings (not this one)
-                boolean hasConflict = bookingRepository
-                    .findByReservationDateAndReservationTime(
-                        bookingDetails.getReservationDate(), 
-                        bookingDetails.getReservationTime())
-                    .stream()
-                    .anyMatch(b -> !b.getId().equals(id)); // Exclude current booking
-                
-                if (hasConflict) {
+                // Create a temporary booking object to check table availability
+                // (excluding the current booking from conflict check)
+                Booking tempBooking = new Booking();
+                tempBooking.setId(id); // Keep the same ID
+                tempBooking.setReservationDate(bookingDetails.getReservationDate());
+                tempBooking.setReservationTime(bookingDetails.getReservationTime());
+                tempBooking.setNumberOfGuests(bookingDetails.getNumberOfGuests());
+
+                // Try to assign a table (this will check availability)
+                Integer assignedTable = assignTableForUpdate(tempBooking, id);
+                if (assignedTable == null) {
                     Map<String, String> error = new HashMap<>();
-                    error.put("error", "There is already a booking at this time");
+                    error.put("error", "No tables available for " + bookingDetails.getNumberOfGuests() +
+                            " guest(s) at this time. Please select a different time.");
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
                 }
                 
@@ -147,10 +161,22 @@ public class BookingRestController {
                 booking.setReservationDate(bookingDetails.getReservationDate());
                 booking.setReservationTime(bookingDetails.getReservationTime());
                 booking.setNumberOfGuests(bookingDetails.getNumberOfGuests());
-                Booking updated = bookingRepository.save(booking);
-                return ResponseEntity.ok().body(updated);
+                try {
+                    Booking updated = bookingRepository.save(booking);
+                    return ResponseEntity.ok().body(updated);
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    // Race condition during update
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "This time slot was just booked by another customer. Please select a different time.");
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+                } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+                    // Optimistic locking failure - someone else modified this booking
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "This booking was modified by another user. Please refresh and try again.");
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+                }
             })
-            .orElse(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // DELETE a booking
@@ -181,6 +207,146 @@ public class BookingRestController {
     private boolean checkForConflictingBookings(Booking booking) {
         List<Booking> bookings = bookingRepository.findByReservationDateAndReservationTime(booking.getReservationDate(), booking.getReservationTime());
         return !bookings.isEmpty();
+    }
+
+    /**
+     * Assigns the smallest available table that can accommodate the number of guests.
+     * Table configuration:
+     * - Tables 1, 2, 3: up to 2 guests
+     * - Tables 4, 5, 6, 7: up to 6 guests
+     * - Tables 8, 9: up to 9 guests
+     *
+     * @param booking The booking to assign a table to
+     * @return The assigned table number, or null if no suitable table is available
+     */
+    private Integer assignTable(Booking booking) {
+        int numberOfGuests = booking.getNumberOfGuests();
+        LocalDate date = booking.getReservationDate();
+        LocalTime time = booking.getReservationTime();
+
+        // Calculate booking duration
+        long durationMinutes = numberOfGuests * 15L;
+        LocalTime bookingEndTime = time.plusMinutes(durationMinutes);
+
+        // Get all bookings for this date
+        List<Booking> existingBookings = bookingRepository.findByReservationDate(date);
+
+        // Determine which table size categories can accommodate this party
+        // Try smallest suitable table first
+
+        // 1. Try tables 1-3 (2 guests max) if party size fits
+        if (numberOfGuests <= 2) {
+            for (int tableNum = 1; tableNum <= 3; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        // 2. Try tables 4-7 (6 guests max) if party size fits
+        if (numberOfGuests <= 6) {
+            for (int tableNum = 4; tableNum <= 7; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        // 3. Try tables 8-9 (9 guests max) if party size fits
+        if (numberOfGuests <= 9) {
+            for (int tableNum = 8; tableNum <= 9; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        // No available table found
+        return null;
+    }
+
+    /**
+     * Checks if a specific table is available for the given time period.
+     * A table is available if there are no overlapping bookings.
+     *
+     * @param tableNumber The table number to check
+     * @param startTime The requested booking start time
+     * @param endTime The requested booking end time
+     * @param existingBookings All bookings for the requested date
+     * @return true if the table is available, false otherwise
+     */
+    private boolean isTableAvailable(int tableNumber, LocalTime startTime, LocalTime endTime,
+                                     List<Booking> existingBookings) {
+        for (Booking existing : existingBookings) {
+            // Skip bookings for different tables
+            if (existing.getTableNumber() == null || existing.getTableNumber() != tableNumber) {
+                continue;
+            }
+
+            // Calculate existing booking's time range
+            LocalTime existingStart = existing.getReservationTime();
+            long existingDuration = existing.getNumberOfGuests() * 15L;
+            LocalTime existingEnd = existingStart.plusMinutes(existingDuration);
+
+            // Check for overlap
+            // Overlap occurs if: (startTime < existingEnd) AND (endTime > existingStart)
+            if (startTime.isBefore(existingEnd) && endTime.isAfter(existingStart)) {
+                return false; // Table is occupied during this time
+            }
+        }
+
+        return true; // Table is available
+    }
+
+    /**
+     * Assigns a table for an existing booking update, excluding the booking being updated
+     * from conflict checking.
+     *
+     * @param booking The booking with updated details
+     * @param excludeBookingId The ID of the booking being updated (to exclude from conflicts)
+     * @return The assigned table number, or null if no suitable table is available
+     */
+    private Integer assignTableForUpdate(Booking booking, Long excludeBookingId) {
+        int numberOfGuests = booking.getNumberOfGuests();
+        LocalDate date = booking.getReservationDate();
+        LocalTime time = booking.getReservationTime();
+
+        // Calculate booking duration
+        long durationMinutes = numberOfGuests * 15L;
+        LocalTime bookingEndTime = time.plusMinutes(durationMinutes);
+
+        // Get all bookings for this date, excluding the one being updated
+        List<Booking> existingBookings = bookingRepository.findByReservationDate(date)
+                .stream()
+                .filter(b -> !b.getId().equals(excludeBookingId))
+                .toList();
+
+        // Try smallest suitable table first
+        if (numberOfGuests <= 2) {
+            for (int tableNum = 1; tableNum <= 3; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        if (numberOfGuests <= 6) {
+            for (int tableNum = 4; tableNum <= 7; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        if (numberOfGuests <= 9) {
+            for (int tableNum = 8; tableNum <= 9; tableNum++) {
+                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
+                    return tableNum;
+                }
+            }
+        }
+
+        return null;
     }
 
     // Validates that a booking can be completed before the cafe closes.

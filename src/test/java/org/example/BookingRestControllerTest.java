@@ -329,5 +329,69 @@ class BookingRestControllerTest {
 
         verify(bookingRepository, never()).save(any(Booking.class));
     }
+    @Test
+    void testConcurrentBookingAttempts() throws Exception {
+        // Arrange - Create two identical bookings
+        Booking booking1 = createValidBooking();
+        booking1.setReservationTime(LocalTime.of(10, 0));
 
+        Booking booking2 = createValidBooking();
+        booking2.setCustomerName("Jane Doe");
+        booking2.setEmail("jane@example.com");
+        booking2.setReservationTime(LocalTime.of(10, 0)); // Same time as booking1
+
+        // Mock repository to return empty list initially (no conflicts)
+        when(bookingRepository.findByReservationDateAndReservationTime(any(), any()))
+                .thenReturn(List.of());
+
+        // First save succeeds
+        when(bookingRepository.save(argThat(b -> b.getCustomerName().equals("John Doe"))))
+                .thenReturn(booking1);
+
+        // Second save throws DataIntegrityViolationException (simulates race condition)
+        when(bookingRepository.save(argThat(b -> b.getCustomerName().equals("Jane Doe"))))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key"));
+
+        // Act - First booking should succeed
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking1)))
+                .andExpect(status().isCreated());
+
+        // Act - Second booking should fail with conflict
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking2)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(
+                        containsString("just booked by another customer")));
+    }
+
+    @Test
+    void testOptimisticLockingOnUpdate() throws Exception {
+        // Arrange
+        Booking existingBooking = createValidBooking();
+        existingBooking.setId(1L);
+        existingBooking.setVersion(1L);
+
+        Booking updateRequest = createValidBooking();
+        updateRequest.setCustomerName("Updated Name");
+
+        when(bookingRepository.findById(1L)).thenReturn(java.util.Optional.of(existingBooking));
+        when(bookingRepository.findByReservationDateAndReservationTime(any(), any()))
+                .thenReturn(List.of());
+
+        // Simulate optimistic locking failure (another user modified the booking)
+        when(bookingRepository.save(any(Booking.class)))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                        "Booking", existingBooking.getId()));
+
+        // Act & Assert
+        mockMvc.perform(put("/api/bookings/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateRequest)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(
+                        containsString("modified by another user")));
+    }
 }

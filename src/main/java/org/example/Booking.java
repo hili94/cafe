@@ -6,13 +6,21 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "bookings")
+@Table(name = "bookings",
+        uniqueConstraints = @UniqueConstraint(
+                columnNames = {"reservation_date", "reservation_time"},
+                name = "uk_booking_date_time"
+        ))
+
 public class Booking {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
+    @Version // Optimistic locking
+    private Long version;
+
     @NotBlank(message = "Customer name is required")
     @Size(min = 2, max = 100, message = "Customer name must be between 2 and 100 characters")
     @Column(nullable = false)
@@ -42,6 +50,9 @@ public class Booking {
     @Column(nullable = false)
     private int numberOfGuests;
 
+    @Column(nullable = true) // Will be assigned by backend
+    private Integer tableNumber;
+
     // Default constructor (needed by Spring)
     public Booking() {
     }
@@ -63,6 +74,10 @@ public class Booking {
     public void setId(Long id) {
         this.id = id;
     }
+
+    public Long getVersion() { return version; }
+
+    public void setVersion(Long version) { this.version = version; }
 
     public String getCustomerName() {
         return customerName;
@@ -111,4 +126,8 @@ public class Booking {
     public void setNumberOfGuests(int numberOfGuests) {
         this.numberOfGuests = numberOfGuests;
     }
+
+    public Integer getTableNumber() { return tableNumber; }
+
+    public void setTableNumber(Integer tableNumber) { this.tableNumber = tableNumber; }
 }

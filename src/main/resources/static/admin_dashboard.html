@@ -380,6 +380,7 @@
                             <th>Date</th>
                             <th>Time</th>
                             <th>Guests</th>
+                            <th>Table</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -400,7 +401,7 @@
     </div>
 
     <script>
-        // Simple client-side authentication (insecure but as requested)
+        // Simple client-side authentication (insecure but I don't care)
         const ADMIN_USERNAME = 'admin';
         const ADMIN_PASSWORD = 'admin';
         
@@ -492,6 +493,7 @@
                     <td>${formatDate(booking.reservationDate)}</td>
                     <td>${formatTime(booking.reservationTime)}</td>
                     <td>${booking.numberOfGuests}</td>
+                     <td><strong>Table ${booking.tableNumber || 'N/A'}</strong></td>
                     <td><span class="status-badge status-${status}">${status.toUpperCase()}</span></td>
                     <td>
                         <div class="action-buttons">

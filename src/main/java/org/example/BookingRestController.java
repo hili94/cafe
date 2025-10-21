@@ -44,6 +44,14 @@ public class BookingRestController {
         // Spring automatically validates based on annotations
         // If validation fails, it throws MethodArgumentNotValidException
 
+        // Check if booking can be completed before closing time
+        String validationError = validateBookingTime(booking);
+        if (validationError != null) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", validationError);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+
         //Ensure there is no existing booking at the same time
         boolean isExistingBooking = checkForConflictingBookings(booking);
         if (isExistingBooking) {
@@ -108,9 +116,31 @@ public class BookingRestController {
 
     // PUT - Update an existing booking
     @PutMapping("/{id}")
-    public ResponseEntity<Booking> updateBooking(@PathVariable Long id, @Valid @RequestBody Booking bookingDetails) {
+    public ResponseEntity<?> updateBooking(@PathVariable Long id, @Valid @RequestBody Booking bookingDetails) {
         return bookingRepository.findById(id)
             .map(booking -> {
+                // Check if booking can be completed before closing time
+                String validationError = validateBookingTime(bookingDetails);
+                if (validationError != null) {
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", validationError);
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+                }
+
+                // Check if the new time slot conflicts with OTHER bookings (not this one)
+                boolean hasConflict = bookingRepository
+                    .findByReservationDateAndReservationTime(
+                        bookingDetails.getReservationDate(), 
+                        bookingDetails.getReservationTime())
+                    .stream()
+                    .anyMatch(b -> !b.getId().equals(id)); // Exclude current booking
+                
+                if (hasConflict) {
+                    Map<String, String> error = new HashMap<>();
+                    error.put("error", "There is already a booking at this time");
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+                }
+                
                 booking.setCustomerName(bookingDetails.getCustomerName());
                 booking.setEmail(bookingDetails.getEmail());
                 booking.setPhone(bookingDetails.getPhone());
@@ -118,7 +148,7 @@ public class BookingRestController {
                 booking.setReservationTime(bookingDetails.getReservationTime());
                 booking.setNumberOfGuests(bookingDetails.getNumberOfGuests());
                 Booking updated = bookingRepository.save(booking);
-                return ResponseEntity.ok(updated);
+                return ResponseEntity.ok().body(updated);
             })
             .orElse(ResponseEntity.notFound().build());
     }
@@ -151,6 +181,34 @@ public class BookingRestController {
     private boolean checkForConflictingBookings(Booking booking) {
         List<Booking> bookings = bookingRepository.findByReservationDateAndReservationTime(booking.getReservationDate(), booking.getReservationTime());
         return !bookings.isEmpty();
+    }
+
+    // Validates that a booking can be completed before the cafe closes.
+    // Each guest requires 15 minutes, and cafe closes at 17:00.
+    private String validateBookingTime(Booking booking) {
+        LocalTime closingTime = LocalTime.of(17, 0);
+        LocalTime reservationTime = booking.getReservationTime();
+        int numberOfGuests = booking.getNumberOfGuests();
+
+        // Calculate how long the booking will take (15 minutes per guest)
+        long durationMinutes = numberOfGuests * 15L;
+
+        // Calculate when the booking would end
+        LocalTime bookingEndTime = reservationTime.plusMinutes(durationMinutes);
+
+        // Check if booking would end after closing time
+        if (bookingEndTime.isAfter(closingTime)) {
+            return String.format(
+                    "Booking cannot be completed before closing time (17:00). " +
+                            "A reservation at %s for %d guest%s would require until %s.",
+                    reservationTime.toString(),
+                    numberOfGuests,
+                    numberOfGuests == 1 ? "" : "s",
+                    bookingEndTime.toString()
+            );
+        }
+
+        return null; // Valid booking
     }
 
     // Generate a list of LocalTime objects from 9:00 to 17:00 in 15-minute increments

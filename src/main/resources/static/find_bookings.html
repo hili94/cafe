@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Find Bookings</title>
+    <title>Find Your Bookings - Cafe</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 50px auto;
             padding: 20px;
-            background-color: #d4edda;
+            background-color: #e3f2fd;
         }
         h1 {
             color: #333;
@@ -20,7 +20,7 @@
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
         .form-group {
             margin-bottom: 20px;
@@ -42,15 +42,22 @@
         button {
             width: 100%;
             padding: 12px;
-            background-color: #4CAF50;
+            background-color: #2196F3;
             color: white;
             border: none;
             border-radius: 4px;
             font-size: 16px;
             cursor: pointer;
             font-weight: bold;
+            margin-top: 10px;
         }
         button:hover {
+            background-color: #0b7dda;
+        }
+        button#backToHome {
+            background-color: #4CAF50;
+        }
+        button#backToHome:hover {
             background-color: #45a049;
         }
         .error {
@@ -62,143 +69,345 @@
             border: 1px solid #f5c6cb;
             display: none;
         }
-        #bookingsList {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
             display: none;
         }
+        #results {
+            margin-top: 20px;
+        }
         .booking-card {
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 15px;
+            background: white;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .booking-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn-edit {
+            background-color: #2196F3;
+            color: white;
+            padding: 8px 16px;
+            border: none;
             border-radius: 4px;
-            background-color: #f9f9f9;
+            cursor: pointer;
+            width: auto;
         }
-        .booking-card h3 {
-            margin-top: 0;
-            color: #333;
+        .btn-edit:hover {
+            background-color: #0b7dda;
         }
-        .booking-info {
-            margin: 5px 0;
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #000;
         }
     </style>
 </head>
 <body>
-<h1>☕ Look Up Cafe Bookings</h1>
+<h1>🔍 Find Your Bookings</h1>
 
 <!-- Error message -->
 <div id="errorMessage" class="error"></div>
 
-<form id="lookUpForm">
+<!-- Success message -->
+<div id="successMessage" class="success"></div>
+
+<form id="searchForm">
     <div class="form-group">
-        <label for="email">Email:</label>
-        <input type="email" id="email" placeholder="your.email@example.com"/>
-        <label for="phone">Phone:</label>
-        <input type="tel" id="phone" placeholder="555-9999"/>
+        <label for="searchEmail">Search by Email:</label>
+        <input type="email" id="searchEmail" placeholder="your.email@example.com"/>
     </div>
-    <button type="submit">Look Up Bookings</button>
-    <br>
-    <br>
-    <button type="button" id="backButton">Back to Home</button>
+
+    <div class="form-group">
+        <label for="searchPhone">Or Search by Phone:</label>
+        <input type="tel" id="searchPhone" placeholder="555-1234"/>
+    </div>
+
+    <button type="submit">Search</button>
+    <button type="button" id="backToHome">Back to Home</button>
 </form>
 
-<!-- Bookings list -->
-<div id="bookingsList"></div>
+<div id="results"></div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Edit Booking</h2>
+        <form id="editBookingForm">
+            <input type="hidden" id="editBookingId">
+
+            <div class="form-group">
+                <label for="editCustomerName">Name:</label>
+                <input type="text" id="editCustomerName" required/>
+            </div>
+
+            <div class="form-group">
+                <label for="editEmail">Email:</label>
+                <input type="email" id="editEmail" required/>
+            </div>
+
+            <div class="form-group">
+                <label for="editPhone">Phone:</label>
+                <input type="tel" id="editPhone" required/>
+            </div>
+
+            <div class="form-group">
+                <label for="editReservationDate">Reservation Date:</label>
+                <input type="date" id="editReservationDate" required/>
+            </div>
+
+            <div class="form-group">
+                <label for="editReservationTime">Reservation Time:</label>
+                <select id="editReservationTime" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">-- Select a time --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="editNumberOfGuests">Number of Guests:</label>
+                <input type="number" id="editNumberOfGuests" min="1" max="20" required/>
+            </div>
+
+            <button type="submit">Update Booking</button>
+        </form>
+    </div>
+</div>
 
 <script>
-
-    // Redirect to home page
-    document.getElementById('backButton').addEventListener('click', function() {
-        window.location.href = '/';
+    // Back to Home button - MUST be at the top
+    document.getElementById('backToHome').addEventListener('click', function() {
+        window.location.href = '/booking_form.html';
     });
 
-    document.getElementById('lookUpForm').addEventListener('submit', async function(event) {
-        event.preventDefault();
+    // Helper functions
+    function showError(message) {
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = '❌ ' + message;
+        errorDiv.style.display = 'block';
+        document.getElementById('successMessage').style.display = 'none';
+    }
+
+    function showSuccess(message) {
+        const successDiv = document.getElementById('successMessage');
+        successDiv.textContent = '✅ ' + message;
+        successDiv.style.display = 'block';
+        document.getElementById('errorMessage').style.display = 'none';
+        setTimeout(() => {
+            successDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    // Search form submission
+    document.getElementById('searchForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
 
         // Hide previous messages
         document.getElementById('errorMessage').style.display = 'none';
-        document.getElementById('bookingsList').style.display = 'none';
+        document.getElementById('successMessage').style.display = 'none';
 
-        // Get input from form
-        const email = document.getElementById('email').value;
-        const phone = document.getElementById('phone').value;
-        let fetchCall = '';
-        if (!email) {
-            if (!phone) {
-                showError('Please enter an email or phone number.');
-                return;
-            } else {
-                fetchCall = '/api/bookings/phone/' + encodeURIComponent(phone);
-            }
-        } else {
-            fetchCall = '/api/bookings/email/' + encodeURIComponent(email);
+        const email = document.getElementById('searchEmail').value.trim();
+        const phone = document.getElementById('searchPhone').value.trim();
+
+        if (!email && !phone) {
+            showError('Please enter either an email or phone number');
+            return;
         }
 
         try {
-            // Call REST API
-            const response = await fetch(fetchCall, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    showError('No bookings found!.');
-                } else {
-                    showError('Error fetching bookings. Please try again.');
-                }
-                return;
+            let response;
+            if (email) {
+                response = await fetch(`/api/bookings/email/${encodeURIComponent(email)}`);
+            } else {
+                response = await fetch(`/api/bookings/phone/${encodeURIComponent(phone)}`);
             }
 
-            // Parse JSON response
-            const bookings = await response.json();
-
-            if (bookings.length === 0) {
-                showError('No bookings found!');
-                return;
+            if (response.ok) {
+                const bookings = await response.json();
+                displayBookings(bookings);
+            } else if (response.status === 404) {
+                showError('No bookings found');
+                document.getElementById('results').innerHTML = '';
+            } else {
+                showError('Error searching for bookings');
             }
-
-            // Display bookings
-            displayBookings(bookings);
-
         } catch (error) {
             showError('Network error. Please try again.');
             console.error('Error:', error);
         }
     });
 
-    function showError(message) {
-        const errorDiv = document.getElementById('errorMessage');
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
-    }
-
+    // Display bookings
     function displayBookings(bookings) {
-        const bookingsList = document.getElementById('bookingsList');
-
-        let html = '<h2>Your Bookings (' + bookings.length + ')</h2>';
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '';
 
         bookings.forEach(booking => {
-            html += `
-                <div class="booking-card">
-                    <h3>Booking #${booking.id}</h3>
-                    <div class="booking-info"><strong>Name:</strong> ${booking.customerName}</div>
-                    <div class="booking-info"><strong>Email:</strong> ${booking.email}</div>
-                    <div class="booking-info"><strong>Phone:</strong> ${booking.phone}</div>
-                    <div class="booking-info"><strong>Date:</strong> ${booking.reservationDate}</div>
-                    <div class="booking-info"><strong>Time:</strong> ${booking.reservationTime}</div>
-                    <div class="booking-info"><strong>Guests:</strong> ${booking.numberOfGuests}</div>
-                </div>
-            `;
+            const bookingCard = document.createElement('div');
+            bookingCard.className = 'booking-card';
+            bookingCard.innerHTML = `
+                    <h3>${booking.customerName}</h3>
+                    <p><strong>Email:</strong> ${booking.email}</p>
+                    <p><strong>Phone:</strong> ${booking.phone}</p>
+                    <p><strong>Date:</strong> ${booking.reservationDate}</p>
+                    <p><strong>Time:</strong> ${booking.reservationTime}</p>
+                    <p><strong>Guests:</strong> ${booking.numberOfGuests}</p>
+                    <div class="booking-actions">
+                        <button class="btn-edit" onclick="openEditModal(${booking.id})">Edit Booking</button>
+                    </div>
+                `;
+            resultsDiv.appendChild(bookingCard);
         });
-
-        bookingsList.innerHTML = html;
-        bookingsList.style.display = 'block';
     }
+
+    // Open edit modal
+    async function openEditModal(bookingId) {
+        try {
+            const response = await fetch(`/api/bookings/${bookingId}`);
+            if (!response.ok) {
+                showError('Unable to load booking details');
+                return;
+            }
+
+            const booking = await response.json();
+
+            // Populate form
+            document.getElementById('editBookingId').value = booking.id;
+            document.getElementById('editCustomerName').value = booking.customerName;
+            document.getElementById('editEmail').value = booking.email;
+            document.getElementById('editPhone').value = booking.phone;
+            document.getElementById('editReservationDate').value = booking.reservationDate;
+            document.getElementById('editNumberOfGuests').value = booking.numberOfGuests;
+
+            // Load available time slots
+            await loadAvailableTimesForEdit(booking.reservationDate, booking.reservationTime);
+
+            // Show modal
+            document.getElementById('editModal').style.display = 'block';
+        } catch (error) {
+            showError('Error loading booking: ' + error.message);
+        }
+    }
+
+    // Load available times for edit modal
+    async function loadAvailableTimesForEdit(date, currentTime) {
+        try {
+            const response = await fetch(`/api/bookings/available-times/${date}`);
+            const timeslots = await response.json();
+
+            const selectElement = document.getElementById('editReservationTime');
+            selectElement.innerHTML = '<option value="">-- Select a time --</option>';
+
+            // Add current time even if not in available list
+            if (currentTime && !timeslots.includes(currentTime)) {
+                timeslots.push(currentTime);
+                timeslots.sort();
+            }
+
+            timeslots.forEach(timeslot => {
+                const option = document.createElement('option');
+                option.value = timeslot;
+                option.textContent = timeslot;
+                if (timeslot === currentTime) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading time slots:', error);
+        }
+    }
+
+    // Handle date change in edit form
+    document.getElementById('editReservationDate').addEventListener('change', async function() {
+        const selectedDate = this.value;
+        const currentTime = document.getElementById('editReservationTime').value;
+        await loadAvailableTimesForEdit(selectedDate, currentTime);
+    });
+
+    // Close modal handlers
+    document.querySelector('.close').onclick = function() {
+        document.getElementById('editModal').style.display = 'none';
+    };
+
+    window.onclick = function(event) {
+        const modal = document.getElementById('editModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    };
+
+    // Handle edit form submission
+    document.getElementById('editBookingForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const bookingId = document.getElementById('editBookingId').value;
+        const updatedBooking = {
+            customerName: document.getElementById('editCustomerName').value,
+            email: document.getElementById('editEmail').value,
+            phone: document.getElementById('editPhone').value,
+            reservationDate: document.getElementById('editReservationDate').value,
+            reservationTime: document.getElementById('editReservationTime').value,
+            numberOfGuests: parseInt(document.getElementById('editNumberOfGuests').value)
+        };
+
+        try {
+            const response = await fetch(`/api/bookings/${bookingId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedBooking)
+            });
+
+            if (response.ok) {
+                showSuccess('Booking updated successfully!');
+                document.getElementById('editModal').style.display = 'none';
+                // Refresh the bookings list
+                document.getElementById('searchForm').dispatchEvent(new Event('submit'));
+            } else {
+                const errorData = await response.json();
+                showError(errorData.error || 'Unable to update booking');
+            }
+        } catch (error) {
+            showError('Network error. Please try again.');
+        }
+    });
 </script>
 </body>
 </html>

@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.*;
@@ -222,4 +223,111 @@ class BookingRestControllerTest {
 
         verify(bookingRepository, times(1)).findByReservationDate(booking.getReservationDate());
     }
+
+    @Test
+    void testCreateBooking_TooLateForClosingTime() throws Exception {
+        // Arrange - Try to book at 16:45 with 3 guests (needs 45 min, would end at 17:30)
+        Booking booking = createValidBooking();
+        booking.setReservationTime(LocalTime.of(16, 45));
+        booking.setNumberOfGuests(3);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        containsString("cannot be completed before closing time")));
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+
+    @Test
+    void testCreateBooking_JustBeforeClosing_Valid() throws Exception {
+        // Arrange - Book at 16:45 with 1 guest (needs 15 min, ends at 17:00) - should work
+        Booking booking = createValidBooking();
+        booking.setReservationTime(LocalTime.of(16, 45));
+        booking.setNumberOfGuests(1);
+        booking.setId(1L);
+
+        when(bookingRepository.findByReservationDateAndReservationTime(any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1));
+
+        verify(bookingRepository, times(1)).save(any(Booking.class));
+    }
+
+    @Test
+    void testCreateBooking_MaxGuests_TooLate() throws Exception {
+        // Arrange - Try to book max guests (9) at 15:00 (needs 135 min, would end at 17:15)
+        Booking booking = createValidBooking();
+        booking.setReservationTime(LocalTime.of(15, 0));
+        booking.setNumberOfGuests(9);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        containsString("cannot be completed before closing time")));
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+    @Test
+    void testCreateBooking_MaxGuests_JustInTime() throws Exception {
+        // Arrange - Book max guests (9) at 14:45 (needs 135 min, ends exactly at 17:00)
+        Booking booking = createValidBooking();
+        booking.setReservationTime(LocalTime.of(14, 45));
+        booking.setNumberOfGuests(9);
+        booking.setId(1L);
+
+        when(bookingRepository.findByReservationDateAndReservationTime(any(), any()))
+                .thenReturn(List.of());
+        when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1));
+
+        verify(bookingRepository, times(1)).save(any(Booking.class));
+    }
+
+    @Test
+    void testUpdateBooking_TooLateForClosingTime() throws Exception {
+        // Arrange
+        Booking existingBooking = createValidBooking();
+        existingBooking.setId(1L);
+        existingBooking.setReservationTime(LocalTime.of(10, 0));
+        existingBooking.setNumberOfGuests(2);
+
+        Booking updatedBooking = createValidBooking();
+        updatedBooking.setReservationTime(LocalTime.of(16, 45));
+        updatedBooking.setNumberOfGuests(3); // Would end at 17:30
+
+        when(bookingRepository.findById(1L)).thenReturn(java.util.Optional.of(existingBooking));
+
+        // Act & Assert
+        mockMvc.perform(put("/api/bookings/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updatedBooking)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        containsString("cannot be completed before closing time")));
+
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
 }

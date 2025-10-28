@@ -1,6 +1,12 @@
 # GET all bookings
 curl http://localhost:8080/api/bookings
 
+# GET bookings filtered by email
+curl "http://localhost:8080/api/bookings?email=jane@example.com"
+
+# GET bookings filtered by phone
+curl "http://localhost:8080/api/bookings?phone=555-1234"
+
 # GET one booking
 curl http://localhost:8080/api/bookings/1
 

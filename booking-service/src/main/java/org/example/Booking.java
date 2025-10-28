@@ -8,8 +8,8 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "bookings",
         uniqueConstraints = @UniqueConstraint(
-                columnNames = {"reservation_date", "reservation_time"},
-                name = "uk_booking_date_time"
+                columnNames = {"reservation_date", "reservation_time", "table_number"},
+                name = "uk_booking_date_time_table"
         ))
 
 public class Booking {

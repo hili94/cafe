@@ -26,9 +26,23 @@ public class BookingRestController {
 
     // GET all bookings
     @GetMapping
-    public List<Booking> getAllBookings() {
-        return bookingRepository.findAll();
+    public List<Booking> getAllBookings(
+        @RequestParam(required = false) String email,
+        @RequestParam(required = false) String phone) {
+    
+    // Filter by email if provided
+    if (email != null && !email.isEmpty()) {
+        return bookingRepository.findByEmail(email);
     }
+    
+    // Filter by phone if provided
+    if (phone != null && !phone.isEmpty()) {
+        return bookingRepository.findByPhone(phone);
+    }
+    
+    // Return all bookings if no filters
+    return bookingRepository.findAll();
+}
 
     // GET a single booking by ID
     @GetMapping("/{id}")
@@ -99,30 +113,6 @@ public class BookingRestController {
         }
 
         return ResponseEntity.ok(times);
-    }
-
-    // GET - Get bookings by email
-    @GetMapping("/email/{email}")
-    public ResponseEntity<List<Booking>> getBookingsByEmail(@PathVariable String email) {
-        List<Booking> bookings = bookingRepository.findByEmail(email);
-
-        if (bookings.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.ok(bookings);
-    }
-
-    // GET - Get bookings by phone
-    @GetMapping("/phone/{phone}")
-    public ResponseEntity<List<Booking>> getBookingsByPhone(@PathVariable String phone) {
-        List<Booking> bookings = bookingRepository.findByPhone(phone);
-
-        if (bookings.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.ok(bookings);
     }
 
     // PUT - Update an existing booking

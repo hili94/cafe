@@ -2,6 +2,7 @@ package org.example;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -115,7 +117,8 @@ class BookingRestControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", is(1)))
                 .andExpect(jsonPath("$.customerName", is("John Doe")))
-                .andExpect(jsonPath("$.email", is("johndoe@gmail.com")));
+                .andExpect(jsonPath("$.email", is("johndoe@gmail.com")))
+                .andExpect(jsonPath("$.numberOfGuests", is(4)));
 
         verify(bookingRepository, times(1)).save(any(Booking.class));
     }
@@ -394,4 +397,78 @@ class BookingRestControllerTest {
                 .andExpect(jsonPath("$.error").value(
                         containsString("modified by another user")));
     }
+
+    @Test
+    void testTableAssignmentSuccessSmallestTable() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setNumberOfGuests(2);
+        
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        when(bookingRepository.save(bookingCaptor.capture())).thenAnswer(invocation -> {
+            Booking saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tableNumber", is(1))); //table 1 is the first, smallest table
+
+        // Verify the controller set the table number before saving
+        assertEquals(1, bookingCaptor.getValue().getTableNumber());
+    }
+
+    @Test
+    void testTableAssignmentSuccessMediumTable() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setNumberOfGuests(5);
+
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        when(bookingRepository.save(bookingCaptor.capture())).thenAnswer(invocation -> {
+            Booking saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tableNumber", is(4))); //table 4 is the first medium table
+
+        // Verify the controller set the table number before saving
+        assertEquals(4, bookingCaptor.getValue().getTableNumber());
+    }
+
+    @Test
+    void testTableAssignmentSuccessLargeTable() throws Exception {
+        // Arrange
+        Booking booking = createValidBooking();
+        booking.setNumberOfGuests(8);
+
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        when(bookingRepository.save(bookingCaptor.capture())).thenAnswer(invocation -> {
+            Booking saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
+
+        // Act & Assert
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(booking)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tableNumber", is(8))); //table 8 is the first large table
+
+        // Verify the controller set the table number before saving
+        assertEquals(8, bookingCaptor.getValue().getTableNumber());
+    }
+
+    // TODO test different table configuration to make sure we fill them up in the right order
 }

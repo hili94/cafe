@@ -50,6 +50,11 @@ public class Booking {
     @Column(nullable = false)
     private int numberOfGuests;
 
+    /*     * Table configuration:
+     * - Tables 1, 2, 3: up to 2 guests
+     * - Tables 4, 5, 6, 7: up to 6 guests
+     * - Tables 8, 9: up to 9 guests
+     */
     @Column(nullable = true) // Will be assigned by backend
     private Integer tableNumber;
 

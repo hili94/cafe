@@ -116,6 +116,17 @@ public class BookingFormE2ETest {
         // Optionally verify error message is NOT displayed
         WebElement error = driver.findElement(By.id("errorMessage"));
         assertFalse(error.isDisplayed());
+
+        //Verify user can look up the successful booking
+        //TODO make this more robust, for now just making sure the page works
+        driver.get("http://localhost:" + port + "/find_bookings.html");
+        driver.findElement(By.id("searchEmail")).sendKeys("john@example.com");
+        driver.findElement(By.cssSelector("button[type='submit']")).click();
+        //get list of results from the 'results' element
+        WebElement results = driver.findElement(By.id("results"));
+        String innerHTML = results.getAttribute("innerHTML");
+        //assert innerHTML contains "John Doe"
+        assertTrue(innerHTML.contains("John Doe"));
     }
 
     @Test

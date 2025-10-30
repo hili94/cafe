@@ -30,19 +30,47 @@ public class BookingRestController {
         @RequestParam(required = false) String email,
         @RequestParam(required = false) String phone) {
     
-    // Filter by email if provided
-    if (email != null && !email.isEmpty()) {
-        return bookingRepository.findByEmail(email);
-    }
+        // Filter by email if provided
+        if (email != null && !email.isEmpty()) {
+            return bookingRepository.findByEmail(email);
+        }
+
+        // Filter by phone if provided
+        if (phone != null && !phone.isEmpty()) {
+            return bookingRepository.findByPhone(phone);
+        }
     
-    // Filter by phone if provided
-    if (phone != null && !phone.isEmpty()) {
-        return bookingRepository.findByPhone(phone);
+        // Return all bookings if no filters
+        return bookingRepository.findAll();
     }
-    
-    // Return all bookings if no filters
-    return bookingRepository.findAll();
-}
+
+    // GET bookings by email
+    @GetMapping("/email/{email}")
+    public ResponseEntity<?> getAllBookingsByEmail(@PathVariable String email) {
+        List<Booking> bookings = bookingRepository.findByEmail(email);
+
+        if (bookings.isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No bookings found with the email");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+
+        return ResponseEntity.status(HttpStatus.OK).body(bookings);
+    }
+
+    //GET bookings by phone
+    @GetMapping("phone/{phone}")
+    public ResponseEntity<?> getAllBookingsByPhone(@PathVariable String phone) {
+        List<Booking> bookings = bookingRepository.findByPhone(phone);
+
+        if (bookings.isEmpty()) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No bookings found with the phone number");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+
+        return ResponseEntity.ok(bookings);
+    }
 
     // GET a single booking by ID
     @GetMapping("/{id}")

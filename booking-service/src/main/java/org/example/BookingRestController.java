@@ -1,11 +1,14 @@
 package org.example;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -19,9 +22,15 @@ import java.util.Map;
 public class BookingRestController {
 
     private final BookingRepository bookingRepository;
+    private final RestTemplate restTemplate;
 
-    public BookingRestController(BookingRepository bookingRepository) {
+    @Value("${table.service.url:http://localhost:8081}")
+    private String tableServiceUrl;
+
+    @Autowired
+    public BookingRestController(BookingRepository bookingRepository, RestTemplate restTemplate) {
         this.bookingRepository = bookingRepository;
+        this.restTemplate = restTemplate;
     }
 
     // GET all bookings
@@ -94,8 +103,8 @@ public class BookingRestController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
 
-        // Assign a table based on number of guests and availability
-        Integer assignedTable = assignTable(booking);
+        // Call TableRestController to assign a table
+        Integer assignedTable = callTableService(booking);
         if (assignedTable == null) {
             Map<String, String> error = new HashMap<>();
             error.put("error", "No tables available for " + booking.getNumberOfGuests() +
@@ -113,6 +122,34 @@ public class BookingRestController {
             Map<String, String> error = new HashMap<>();
             error.put("error", "This time slot was just booked by another customer. Please select a different time.");
             return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
+    }
+
+
+    /**
+     * Calls the table-service to find an available table
+     */
+    private Integer callTableService(Booking booking) {
+        try {
+            long durationMinutes = booking.getNumberOfGuests() * 15L;
+
+            String url = String.format("%s/api/tables/find-available?numberOfGuests=%d&date=%s&time=%s&durationMinutes=%d",
+                    tableServiceUrl,
+                    booking.getNumberOfGuests(),
+                    booking.getReservationDate().toString(),
+                    booking.getReservationTime().toString(),
+                    durationMinutes);
+
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return (Integer) response.getBody().get("tableNumber");
+            }
+            return null;
+        } catch (Exception e) {
+            // Log error and fall back to null
+            System.err.println("Error calling table service: " + e.getMessage());
+            return null;
         }
     }
 

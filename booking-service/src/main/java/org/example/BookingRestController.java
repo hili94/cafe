@@ -2,6 +2,8 @@ package org.example;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -12,10 +14,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -23,6 +22,9 @@ public class BookingRestController {
 
     private final BookingRepository bookingRepository;
     private final RestTemplate restTemplate;
+
+    // DTO for interacting with Table Service
+    private record TableDTO(Long id, Long tableSize) {}
 
     @Value("${table.service.url:http://localhost:8081}")
     private String tableServiceUrl;
@@ -38,7 +40,7 @@ public class BookingRestController {
     public List<Booking> getAllBookings(
         @RequestParam(required = false) String email,
         @RequestParam(required = false) String phone) {
-    
+
         // Filter by email if provided
         if (email != null && !email.isEmpty()) {
             return bookingRepository.findByEmail(email);
@@ -48,7 +50,7 @@ public class BookingRestController {
         if (phone != null && !phone.isEmpty()) {
             return bookingRepository.findByPhone(phone);
         }
-    
+
         // Return all bookings if no filters
         return bookingRepository.findAll();
     }
@@ -97,24 +99,26 @@ public class BookingRestController {
 
         // Check if booking can be completed before closing time
         String validationError = validateBookingTime(booking);
-        if (validationError != null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", validationError);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
-        }
+            if (validationError != null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", validationError);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
 
-        // Call TableRestController to assign a table
-        Integer assignedTable = callTableService(booking);
-        if (assignedTable == null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "No tables available for " + booking.getNumberOfGuests() +
-                    " guest(s) at this time. Please select a different time.");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
-        }
+            // Logic moved back to BookingService to avoid circular dependency
+            // We use local data to check availability instead of calling external service
+            Integer assignedTable = assignTable(booking);
 
-        booking.setTableNumber(assignedTable);
+            if (assignedTable == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "No tables available for " + booking.getNumberOfGuests() +
+                        " guest(s) at this time. Please select a different time.");
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+            }
 
-        try {
+            booking.setTableNumber(assignedTable);
+
+            try {
             Booking savedBooking = bookingRepository.save(booking);
             return ResponseEntity.status(HttpStatus.CREATED).body(savedBooking);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
@@ -125,33 +129,6 @@ public class BookingRestController {
         }
     }
 
-
-    /**
-     * Calls the table-service to find an available table
-     */
-    private Integer callTableService(Booking booking) {
-        try {
-            long durationMinutes = booking.getNumberOfGuests() * 15L;
-
-            String url = String.format("%s/api/tables/find-available?numberOfGuests=%d&date=%s&time=%s&durationMinutes=%d",
-                    tableServiceUrl,
-                    booking.getNumberOfGuests(),
-                    booking.getReservationDate().toString(),
-                    booking.getReservationTime().toString(),
-                    durationMinutes);
-
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                return (Integer) response.getBody().get("tableNumber");
-            }
-            return null;
-        } catch (Exception e) {
-            // Log error and fall back to null
-            System.err.println("Error calling table service: " + e.getMessage());
-            return null;
-        }
-    }
 
     // GET - Get list of available time slots for given date
     @GetMapping("/available-times/{date}")
@@ -209,7 +186,7 @@ public class BookingRestController {
                             " guest(s) at this time. Please select a different time.");
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
                 }
-                
+
                 booking.setCustomerName(bookingDetails.getCustomerName());
                 booking.setEmail(bookingDetails.getEmail());
                 booking.setPhone(bookingDetails.getPhone());
@@ -265,11 +242,27 @@ public class BookingRestController {
     }
 
     /**
+     * Fetch the list of all tables from the Table Service (Inventory)
+     */
+    private List<TableDTO> fetchTables() {
+        String url = tableServiceUrl + "/api/tables";
+        try {
+            ResponseEntity<List<TableDTO>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<TableDTO>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : new ArrayList<>();
+        } catch (Exception e) {
+            System.err.println("Error fetching tables: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
      * Assigns the smallest available table that can accommodate the number of guests.
-     * Table configuration:
-     * - Tables 1, 2, 3: up to 2 guests
-     * - Tables 4, 5, 6, 7: up to 6 guests
-     * - Tables 8, 9: up to 9 guests
+     * Fetches table configurations dynamically from Table Service.
      *
      * @param booking The booking to assign a table to
      * @return The assigned table number, or null if no suitable table is available
@@ -283,35 +276,21 @@ public class BookingRestController {
         long durationMinutes = numberOfGuests * 15L;
         LocalTime bookingEndTime = time.plusMinutes(durationMinutes);
 
+        // Get table inventory
+        List<TableDTO> allTables = fetchTables();
+
+        // Sort tables by size (ascending) to try smallest suitable table first
+        allTables.sort(Comparator.comparingLong(TableDTO::tableSize));
+
         // Get all bookings for this date
         List<Booking> existingBookings = bookingRepository.findByReservationDate(date);
 
-        // Determine which table size categories can accommodate this party
-        // Try smallest suitable table first
-
-        // 1. Try tables 1-3 (2 guests max) if party size fits
-        if (numberOfGuests <= 2) {
-            for (int tableNum = 1; tableNum <= 3; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
-                }
-            }
-        }
-
-        // 2. Try tables 4-7 (6 guests max) if party size fits
-        if (numberOfGuests <= 6) {
-            for (int tableNum = 4; tableNum <= 7; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
-                }
-            }
-        }
-
-        // 3. Try tables 8-9 (9 guests max) if party size fits
-        if (numberOfGuests <= 9) {
-            for (int tableNum = 8; tableNum <= 9; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
+        for (TableDTO table : allTables) {
+            // Check if table is large enough
+            if (table.tableSize() >= numberOfGuests) {
+                // Check if table is free
+                if (isTableAvailable(table.id().intValue(), time, bookingEndTime, existingBookings)) {
+                    return table.id().intValue();
                 }
             }
         }
@@ -370,33 +349,20 @@ public class BookingRestController {
         long durationMinutes = numberOfGuests * 15L;
         LocalTime bookingEndTime = time.plusMinutes(durationMinutes);
 
+        // Get table inventory
+        List<TableDTO> allTables = fetchTables();
+        allTables.sort(Comparator.comparingLong(TableDTO::tableSize));
+
         // Get all bookings for this date, excluding the one being updated
         List<Booking> existingBookings = bookingRepository.findByReservationDate(date)
                 .stream()
                 .filter(b -> !b.getId().equals(excludeBookingId))
                 .toList();
 
-        // Try smallest suitable table first
-        if (numberOfGuests <= 2) {
-            for (int tableNum = 1; tableNum <= 3; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
-                }
-            }
-        }
-
-        if (numberOfGuests <= 6) {
-            for (int tableNum = 4; tableNum <= 7; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
-                }
-            }
-        }
-
-        if (numberOfGuests <= 9) {
-            for (int tableNum = 8; tableNum <= 9; tableNum++) {
-                if (isTableAvailable(tableNum, time, bookingEndTime, existingBookings)) {
-                    return tableNum;
+        for (TableDTO table : allTables) {
+            if (table.tableSize() >= numberOfGuests) {
+                if (isTableAvailable(table.id().intValue(), time, bookingEndTime, existingBookings)) {
+                    return table.id().intValue();
                 }
             }
         }
